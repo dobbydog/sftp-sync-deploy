@@ -1,0 +1,15 @@
+{
+  "name": "sftp-deploy",
+  "version": "0.1.0",
+  "description": "Sync local files to remote using SFTP.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "dobbydog",
+  "license": "MIT",
+  "dependencies": {
+    "colors": "^1.1.2",
+    "ssh2": "^0.5.4"
+  }
+}
