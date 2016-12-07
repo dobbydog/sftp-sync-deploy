@@ -8,7 +8,7 @@ const util = require('./util');
  * Creates a new SftpSync instance
  * @class
  */
-function SftpSync(config, options) {
+function SftpDeploy(config, options) {
   /**
    * Config object
    * @member {Object}
@@ -66,7 +66,7 @@ function SftpSync(config, options) {
 /**
  * Make SSH2 connection and start sync
  */
-SftpSync.prototype.start = function() {
+SftpDeploy.prototype.start = function() {
   console.log(`* Deploying to host ${this.config.host}`.green);
   console.log('* local dir  = '.gray + this.localDir);
   console.log('* remote dir = '.gray + this.remoteDir);
@@ -92,7 +92,7 @@ SftpSync.prototype.start = function() {
  * Get sftp stream
  * @return {Promise.<ssh2.SFTPWrapper>}
  */
-SftpSync.prototype.getSftp = function() {
+SftpDeploy.prototype.getSftp = function() {
   if (this.sftp) {
     return Promise.resolve(this.sftp);
   }
@@ -113,7 +113,7 @@ SftpSync.prototype.getSftp = function() {
  * @param {string} remotePath
  * @return {Promise.<boolean>}
  */
-SftpSync.prototype.sync = function(localPath, remotePath) {
+SftpDeploy.prototype.sync = function(localPath, remotePath) {
   return this.buildProject(localPath, remotePath).then(project => {
     let operations = [];
 
@@ -159,7 +159,7 @@ SftpSync.prototype.sync = function(localPath, remotePath) {
  * @param {string} remotePath
  * @return {Promise.<void>}
  */
-SftpSync.prototype.upload = function(localPath, remotePath) {
+SftpDeploy.prototype.upload = function(localPath, remotePath) {
   let isDirectory = fs.statSync(localPath).isDirectory();
 
   return new Promise((resolve, reject) => {
@@ -198,7 +198,7 @@ SftpSync.prototype.upload = function(localPath, remotePath) {
  * @param {string} remotePath
  * @return {Promise.<void>}
  */
-SftpSync.prototype.removeRemote = function(remotePath) {
+SftpDeploy.prototype.removeRemote = function(remotePath) {
   return new Promise((resolve, reject) => {
     this.getSftp().then(sftp => {
       sftp.stat(remotePath, (err, stat) => {
@@ -240,7 +240,7 @@ SftpSync.prototype.removeRemote = function(remotePath) {
  * dummy operation
  * @return {Promise}
  */
-SftpSync.prototype.noop = function() {
+SftpDeploy.prototype.noop = function() {
   return Promise.resolve();
 };
 
@@ -250,7 +250,7 @@ SftpSync.prototype.noop = function() {
  * @param {string} remotePath
  * @return {Promise.<Map>}
  */
-SftpSync.prototype.buildProject = function(localPath, remotePath) {
+SftpDeploy.prototype.buildProject = function(localPath, remotePath) {
   let localList = fs.readdirSync(localPath);
   let project = new Map();
 
@@ -340,4 +340,4 @@ function label(stat) {
 /**
  * @module SftpSync
  */
-module.exports = SftpSync;
+module.exports = SftpDeploy;
