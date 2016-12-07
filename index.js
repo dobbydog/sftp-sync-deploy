@@ -72,20 +72,25 @@ SftpDeploy.prototype.start = function() {
   console.log('* remote dir = '.gray + this.remoteDir);
   console.log('');
 
-  this.client.on('ready', () => {
-    this.sync(this.localDir, this.remoteDir).then(() => {
-      console.log('done');
-      this.client.end();
+  return new Promise((resolve, reject) => {
+    this.client.on('ready', () => {
+      this.sync(this.localDir, this.remoteDir).then(() => {
+        console.log('done');
+        this.client.end();
+        resolve(true);
+      }).catch(err => {
+        reject(err);
+      });
+    })
+    .connect({
+      host: this.config.host,
+      port: this.config.port || 22,
+      username: this.config.username,
+      password: this.config.password,
+      passphrase: this.config.passphrase,
+      privateKey: fs.readFileSync(this.config.privateKey)
     });
   })
-  .connect({
-    host: this.config.host,
-    port: this.config.port || 22,
-    username: this.config.username,
-    password: this.config.password,
-    passphrase: this.config.passphrase,
-    privateKey: fs.readFileSync(this.config.privateKey)
-  });
 };
 
 /**
@@ -148,8 +153,6 @@ SftpDeploy.prototype.sync = function(localPath, remotePath) {
     }
 
     return true;
-  }).catch(err => {
-    console.error(err);
   });
 };
 
@@ -338,6 +341,9 @@ function label(stat) {
 }
 
 /**
- * @module SftpSync
+ * @module sftp-deploy
  */
-module.exports = SftpDeploy;
+module.exports = function deploy(config, options) {
+  const deployer = new SftpDeploy(config, options);
+  return deployer.start();
+};
