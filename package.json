@@ -1,6 +1,6 @@
 {
   "name": "sftp-sync-deploy",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "description": "Sync local files to remote using SFTP.",
   "main": "index.js",
   "scripts": {
