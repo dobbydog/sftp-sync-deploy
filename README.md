@@ -1,4 +1,4 @@
-# sftp-deploy
+# sftp-sync-deploy
 Sync local files to remote using SFTP.
 
 ## Usage
