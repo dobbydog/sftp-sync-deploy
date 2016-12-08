@@ -1,5 +1,5 @@
 {
-  "name": "sftp-deploy",
+  "name": "sftp-sync-deploy",
   "version": "0.1.0",
   "description": "Sync local files to remote using SFTP.",
   "main": "index.js",
@@ -8,6 +8,10 @@
   },
   "author": "dobbydog",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dobbydog/sftp-sync-deploy.git"
+  },
   "dependencies": {
     "colors": "^1.1.2",
     "ssh2": "^0.5.4"
