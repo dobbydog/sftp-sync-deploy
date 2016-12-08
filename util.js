@@ -1,13 +1,30 @@
 require('colors');
 
+/**
+ * Escapes regexp special chars
+ * @param {string} str
+ * @return {string}
+ */
 function escapeRegExp(str) {
   return str.replace(/[\-\[\]\/\{\}\(\)\*\+\?\.\\\^\$\|]/g, '\\$&');
 }
 
+/**
+ * Trim trailing char
+ * @param {string} str
+ * @param {string} char
+ * @return {string}
+ */
 function chomp(str, char) {
   return str.replace(new RegExp(escapeRegExp(char) + '+$'), '');
 }
 
+/**
+ * Get relative path for display
+ * @param {string} pathStr
+ * @param {string} root
+ * @return {string}
+ */
 function normalizedRelativePath(pathStr, root) {
   let relative = pathStr.replace(new RegExp(escapeRegExp(root)), '').replace(/\\/g, '/');
 
@@ -15,7 +32,7 @@ function normalizedRelativePath(pathStr, root) {
 }
 
 /**
- * Get a task by stats
+ * Get task by stats
  * @param {Object} stats
  * @return {string[]}
  */
@@ -38,7 +55,7 @@ function getTask(stats) {
 }
 
 /**
- * Get a colored label string by stat
+ * Get colored label string for stat
  * @param {Object} stat
  * @return {string}
  */

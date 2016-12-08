@@ -5,7 +5,7 @@ const fs = require('fs');
 const util = require('./util');
 
 /**
- * Creates a new SftpSync instance
+ * Creates a new SftpDeploy instance
  * @class
  */
 function SftpDeploy(config, options) {
@@ -64,6 +64,7 @@ function SftpDeploy(config, options) {
 
 /**
  * Make SSH2 connection and start sync
+ * @return {Promise.<boolean>}
  */
 SftpDeploy.prototype.start = function() {
   return new Promise((resolve, reject) => {
