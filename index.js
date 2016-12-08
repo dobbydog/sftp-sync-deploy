@@ -1,5 +1,5 @@
+require('colors');
 const Client = require('ssh2').Client;
-const colors = require('colors');
 const path = require('path');
 const fs = require('fs');
 const util = require('./util');
@@ -18,6 +18,8 @@ function SftpDeploy(config, options) {
    * @property {string} password
    * @property {string} passphrase
    * @property {string} privateKey
+   * @property {string} localDir
+   * @property {string} remoteDir
    */
   this.config = config;
 
@@ -40,11 +42,8 @@ function SftpDeploy(config, options) {
    */
   this.sftp = undefined;
 
-  let localDir = path.resolve(this.config.localDir);
-  let remoteDir = this.config.remoteDir;
-
-  if (localDir.endsWith(path.sep)) localDir = util.chomp(localDir, path.sep);
-  if (remoteDir.endsWith('/')) remoteDir = util.chomp(localDir, '/');
+  let localDir = util.chomp(path.resolve(this.config.localDir), path.sep);
+  let remoteDir = util.chomp(this.config.remoteDir, '/');
 
   if (!fs.statSync(localDir).isDirectory()) {
     throw new Error('src: ' + localDir + ' is not directory');
@@ -67,11 +66,6 @@ function SftpDeploy(config, options) {
  * Make SSH2 connection and start sync
  */
 SftpDeploy.prototype.start = function() {
-  console.log(`* Deploying to host ${this.config.host}`.green);
-  console.log('* local dir  = '.gray + this.localDir);
-  console.log('* remote dir = '.gray + this.remoteDir);
-  console.log('');
-
   return new Promise((resolve, reject) => {
     this.client.on('ready', () => {
       this.sync(this.localDir, this.remoteDir).then(() => {
@@ -90,7 +84,7 @@ SftpDeploy.prototype.start = function() {
       passphrase: this.config.passphrase,
       privateKey: fs.readFileSync(this.config.privateKey)
     });
-  })
+  });
 };
 
 /**
@@ -125,10 +119,10 @@ SftpDeploy.prototype.sync = function(localPath, remotePath) {
     project.forEach((stats, filename) => {
       let localFilePath = localPath + path.sep + filename;
       let remoteFilePath = remotePath + '/' + filename;
-      let task = getTask(stats);
+      let task = util.getTask(stats);
 
       if (this.options.dryRun) {
-        console.log(`[ ${label(stats.local)} | ${label(stats.remote)} ] ` + util.normalizedRelativePath(localFilePath, this.localDir));
+        console.log(`[ ${util.label(stats.local)} | ${util.label(stats.remote)} ] ` + util.normalizedRelativePath(localFilePath, this.localDir));
         console.log(`          -> ${task.method}`.magenta);
         console.log('');
 
@@ -309,41 +303,15 @@ SftpDeploy.prototype.buildProject = function(localPath, remotePath) {
 };
 
 /**
- * Get a task by stats
- * @param {Object} stats
- * @return {string[]}
- */
-function getTask(stats) {
-  let task = {method: undefined, removeRemote: false};
-
-  if (!stats.local || (stats.remote && stats.local !== stats.remote)) {
-    task.removeRemote = true;
-  }
-
-  if (!stats.remote || stats.local === 'file' || stats.local === 'dir' && stats.remote === 'file') {
-    task.method = 'upload';
-  } else if (stats.local === 'dir') {
-    task.method = 'sync';
-  } else {
-    task.method = 'noop';
-  }
-
-  return task;
-}
-
-/**
- * Get a colored label string by stat
- * @param {Object} stat
- * @return {string}
- */
-function label(stat) {
-  return stat === 'dir' ? 'D'.cyan : (stat === 'file' ? 'F'.yellow : 'X'.gray);
-}
-
-/**
  * @module sftp-deploy
  */
 module.exports = function deploy(config, options) {
   const deployer = new SftpDeploy(config, options);
+
+  console.log(`* Deploying to host ${config.host}`.green);
+  console.log('* local dir  = '.gray + deployer.localDir);
+  console.log('* remote dir = '.gray + deployer.remoteDir);
+  console.log('');
+
   return deployer.start();
 };
