@@ -28,7 +28,9 @@ function SftpDeploy(config, options) {
    * @member {Object}
    * @property {boolean} dryRun
    */
-  this.options = options;
+  this.options = Object.assign({
+    dryRun: false
+  }, options);
 
   /**
    * SSH2 Client
