@@ -3,7 +3,7 @@ Sync local files to remote using SFTP.
 
 ## Usage
 ```js
-const sftpDeploy = require('sftp-deploy');
+const deploy = require('sftp-sync-deploy');
 
 let config = {
   host: 'example.com',            // required.
@@ -20,7 +20,7 @@ let options = {
   dryRun: false                   // enable dry-run mode
 };
 
-sftpDeploy(config, options).then(() => {
+deploy(config, options).then(() => {
   console.log('success!');
 }).catch(err => {
   console.error('error! ', err);
