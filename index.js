@@ -85,7 +85,7 @@ SftpDeploy.prototype.start = function() {
       username: this.config.username,
       password: this.config.password,
       passphrase: this.config.passphrase,
-      privateKey: fs.readFileSync(this.config.privateKey)
+      privateKey: this.config.privateKey ? fs.readFileSync(this.config.privateKey) : undefined
     });
   });
 };
