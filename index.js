@@ -306,9 +306,9 @@ SftpDeploy.prototype.buildProject = function(localPath, remotePath) {
 };
 
 /**
- * @module sftp-deploy
+ * @return {Promise.<boolean>}
  */
-module.exports = function deploy(config, options) {
+function deploy(config, options) {
   const deployer = new SftpDeploy(config, options);
 
   console.log(`* Deploying to host ${config.host}`.green);
@@ -318,3 +318,6 @@ module.exports = function deploy(config, options) {
 
   return deployer.start();
 };
+
+deploy.deploy = deploy.default = deploy;
+module.exports = deploy;
