@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "colors": "^1.1.2",
+    "minimatch": "^3.0.3",
     "ssh2": "^0.5.4"
   }
 }

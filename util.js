@@ -39,11 +39,13 @@ function normalizedRelativePath(pathStr, root) {
 function getTask(stats) {
   let task = {method: undefined, removeRemote: false};
 
-  if (!stats.local || (stats.remote && stats.local !== stats.remote)) {
+  if (!stats.local || (stats.local === 'ignored' && stats.remote) || (stats.remote && stats.local !== stats.remote)) {
     task.removeRemote = true;
   }
 
-  if (!stats.remote || stats.local === 'file' || stats.local === 'dir' && stats.remote === 'file') {
+  if (stats.local === 'ignored') {
+    task.method = 'noop';
+  } else if (!stats.remote || stats.local === 'file' || stats.local === 'dir' && stats.remote === 'file') {
     task.method = 'upload';
   } else if (stats.local === 'dir') {
     task.method = 'sync';
@@ -60,7 +62,12 @@ function getTask(stats) {
  * @return {string}
  */
 function label(stat) {
-  return stat === 'dir' ? 'D'.cyan : (stat === 'file' ? 'F'.yellow : 'X'.gray);
+  switch (stat) {
+    case 'dir': return 'D'.cyan;
+    case 'file': return 'F'.yellow;
+    case 'ignored': return 'X'.gray;
+    default: return ' ';
+  }
 }
 
 exports.escapeRegExp = escapeRegExp;

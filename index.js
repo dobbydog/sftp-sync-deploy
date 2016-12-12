@@ -1,5 +1,6 @@
 require('colors');
 const Client = require('ssh2').Client;
+const minimatch = require('minimatch');
 const path = require('path');
 const fs = require('fs');
 const util = require('./util');
@@ -29,7 +30,8 @@ function SftpDeploy(config, options) {
    * @property {boolean} dryRun
    */
   this.options = Object.assign({
-    dryRun: false
+    dryRun: false,
+    exclude: []
   }, options);
 
   /**
@@ -72,12 +74,15 @@ SftpDeploy.prototype.start = function() {
   return new Promise((resolve, reject) => {
     this.client.on('ready', () => {
       this.sync(this.localDir, this.remoteDir).then(() => {
-        console.log('done');
-        this.client.end();
         resolve(true);
       }).catch(err => {
         reject(err);
+      }).then(() => {
+        this.client.end();
       });
+    })
+    .on('error', err => {
+      reject(err);
     })
     .connect({
       host: this.config.host,
@@ -101,7 +106,7 @@ SftpDeploy.prototype.getSftp = function() {
 
   return new Promise((resolve, reject) => {
     this.client.sftp((err, sftp) => {
-      if (err) reject(err);
+      if (err) return reject(err);
 
       this.sftp = sftp;
       resolve(sftp);
@@ -123,24 +128,35 @@ SftpDeploy.prototype.sync = function(localPath, remotePath) {
       let localFilePath = localPath + path.sep + filename;
       let remoteFilePath = remotePath + '/' + filename;
       let task = util.getTask(stats);
+      let args = [localFilePath, remoteFilePath];
 
       if (this.options.dryRun) {
+        let taskName = '';
+
+        if (task.removeRemote) {
+          taskName = 'remove remote';
+          if (task.method !== 'noop') {
+            taskName += ' and ' + task.method;
+          }
+        } else if (task.method === 'noop') {
+          taskName = 'ignored';
+        } else {
+          taskName = task.method;
+        }
+
         console.log(`[ ${util.label(stats.local)} | ${util.label(stats.remote)} ] ` + util.normalizedRelativePath(localFilePath, this.localDir));
-        console.log(`          -> ${task.method}`.magenta);
+        console.log(`          -> ${taskName}`.magenta);
         console.log('');
 
-        if (task.method === 'sync') {
+        if (task.method === 'sync' || stats.local === 'dir') {
           operations.push(this.sync(localFilePath, remoteFilePath));
         }
         return;
       }
 
-      let args = [localFilePath, remoteFilePath];
-      let doTask = task.removeRemote
-        ? this.removeRemote(remoteFilePath).then(() => this[task.method].apply(this, args))
-        : this[task.method].apply(this, args);
+      let preMethod = task.removeRemote ? this.removeRemote(remoteFilePath) : Promise.resolve();
 
-      operations.push(doTask);
+      operations.push(preMethod.then(() => this[task.method].apply(this, args)));
     });
 
     return Promise.all(operations);
@@ -168,12 +184,18 @@ SftpDeploy.prototype.upload = function(localPath, remotePath) {
         let localList = fs.readdirSync(localPath);
 
         sftp.mkdir(remotePath, err => {
-          if (err) reject(err);
+          if (err) return reject(err);
 
           let children = [];
 
           localList.forEach(filename => {
-            children.push(this.upload(localPath + path.sep + filename, remotePath + '/' + filename));
+            let fullPath = localPath + path.sep + filename;
+            let isDir = fs.statSync(fullPath).isDirectory();
+            let ignored = this.isIgnored(fullPath, isDir);
+
+            if (!ignored) {
+              children.push(this.upload(localPath + path.sep + filename, remotePath + '/' + filename));
+            }
           });
 
           Promise.all(children).then(() => {
@@ -183,7 +205,7 @@ SftpDeploy.prototype.upload = function(localPath, remotePath) {
         });
       } else {
         sftp.fastPut(localPath, remotePath, (err) => {
-          if (err) reject(err);
+          if (err) return reject(err);
 
           console.log('      file uploaded : '.yellow + util.normalizedRelativePath(localPath, this.localDir));
           resolve();
@@ -202,11 +224,11 @@ SftpDeploy.prototype.removeRemote = function(remotePath) {
   return new Promise((resolve, reject) => {
     this.getSftp().then(sftp => {
       sftp.stat(remotePath, (err, stat) => {
-        if (err) reject(err);
+        if (err) return reject(err);
 
         if (stat.isDirectory()) {
           sftp.readdir(remotePath, (err, list) => {
-            if (err) reject(err);
+            if (err) return reject(err);
 
             let children = [];
 
@@ -216,7 +238,7 @@ SftpDeploy.prototype.removeRemote = function(remotePath) {
 
             Promise.all(children).then(() => {
               sftp.rmdir(remotePath, err => {
-                if (err) reject(err);
+                if (err) return reject(err);
 
                 console.log(' remote dir removed : '.red + util.normalizedRelativePath(remotePath, this.remoteDir));
                 resolve();
@@ -225,7 +247,7 @@ SftpDeploy.prototype.removeRemote = function(remotePath) {
           });
         } else {
           sftp.unlink(remotePath, err => {
-            if (err) reject(err);
+            if (err) return reject(err);
 
             console.log('remote file removed : '.red + util.normalizedRelativePath(remotePath, this.remoteDir));
             resolve();
@@ -255,8 +277,11 @@ SftpDeploy.prototype.buildProject = function(localPath, remotePath) {
   let project = new Map();
 
   localList.forEach(filename => {
-    let stat = fs.statSync(localPath + path.sep + filename);
-    project.set(filename, {local: stat.isDirectory() ? 'dir' : 'file', remote: null});
+    let fullPath = localPath + path.sep + filename;
+    let isDir = fs.statSync(fullPath).isDirectory();
+    let ignored = this.isIgnored(fullPath, isDir);
+
+    project.set(filename, {local: ignored ? 'ignored' : isDir ? 'dir' : 'file', remote: null});
   });
 
   return new Promise((resolve, reject) => {
@@ -276,7 +301,7 @@ SftpDeploy.prototype.buildProject = function(localPath, remotePath) {
         remoteList.forEach(file => {
           let setStat = new Promise((resolve2, reject2) => {
             sftp.stat(remotePath + '/' + file.filename, (err, stat) => {
-              if (err) reject2(err);
+              if (err) return reject2(err);
 
               let type = stat.isDirectory() ? 'dir' : 'file';
               let stats;
@@ -304,6 +329,20 @@ SftpDeploy.prototype.buildProject = function(localPath, remotePath) {
     });
   });
 };
+
+/**
+ * Check if the path matches the exclude patterns
+ * @param {string} localPath
+ * @param {boolean} isDir
+ * @return {boolean}
+ */
+SftpDeploy.prototype.isIgnored = function(localPath, isDir) {
+  let pathForMatch = util.normalizedRelativePath(localPath, this.localDir);
+
+  if (isDir) pathForMatch += '/';
+
+  return this.options.exclude.some(pattern => minimatch(pathForMatch, pattern));
+}
 
 /**
  * @return {Promise.<boolean>}
