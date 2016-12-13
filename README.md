@@ -35,10 +35,10 @@ deploy(config, options).then(() => {
 
 ### TypeScript
 ```ts
-import { deploy, SftpSyncDeployConfig, SftpSyncDeployOptions } from 'sftp-sync-deploy';
+import { deploy, SftpSyncConfig, SftpSyncOptions } from 'sftp-sync-deploy';
 
-let config: SftpSyncDeployConfig = {...};
-let options: SftpSyncDeployOptions = {...};
+let config: SftpSyncConfig = {...};
+let options: SftpSyncOptions = {...};
 
 deploy(config, options);
 ```
@@ -48,15 +48,15 @@ deploy(config, options);
 deploy(config, {dryRun: true});
 ```
 ```
-# Both local and remote are file. (upload the file)
+# Local is a file. (upload the file)
 [ F | F ] index.html
           -> upload
 
-# Both local and remote are directory. (sync recursively)
+# Both local and remote are directories. (sync recursively)
 [ D | D ] lib
           -> sync
 
-# Local is directory and remote doesn't exist. (upload the whole directory)
+# Local is a directory and remote doesn't exist. (upload the whole directory)
 [ D |   ] assets
           -> upload
 
@@ -69,8 +69,8 @@ deploy(config, {dryRun: true});
 
 # Excluded. (do nothing)
 [ X |   ] node_modules
-          -> ignored
+          -> ignore
 
-# Local and remote are same name but have different type. (remove remote then upload local)
+# Local and remote have same name but different type. (remove remote then upload local)
 [ F | D ] test
           -> remove remote and upload

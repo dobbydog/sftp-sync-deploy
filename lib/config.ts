@@ -13,7 +13,3 @@ export interface SftpSyncOptions {
   dryRun?: boolean;
   exclude?: string[];
 }
-
-export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Promise<boolean>;
-
-export default deploy;
