@@ -47,18 +47,25 @@ deploy(config, options);
 ```js
 deploy(config, {dryRun: true});
 ```
+Outputs the tasks to be done for each file in following format. Any changes of the files will not be performed.
+```
+[ (local file status) | (remote file status) ] (file path)
+                                               -> (task)
+```
+
+### Output example
 ```
 # Local is a file. (upload the file)
 [ F | F ] index.html
           -> upload
 
-# Both local and remote are directories. (sync recursively)
+# Local is a directory. (sync recursively)
 [ D | D ] lib
           -> sync
 
-# Local is a directory and remote doesn't exist. (upload the whole directory)
-[ D |   ] assets
-          -> upload
+# Excluded. (do nothing)
+[ X |   ] node_modules
+          -> ignore
 
 # Remote exists but local doesn't, or is excluded. (remove the remote file or directory)
 [   | F ] index.html.bak
@@ -67,10 +74,10 @@ deploy(config, {dryRun: true});
 [ X | D ] .bin
           -> remove remote
 
-# Excluded. (do nothing)
-[ X |   ] node_modules
-          -> ignore
-
-# Local and remote have same name but different type. (remove remote then upload local)
+# Local and remote have the same name but the different types. (remove remote then upload local)
 [ F | D ] test
           -> remove remote and upload
+
+# Permission error in the remote server. (ignored)
+[ F | ! ] secret.txt
+          -> denied

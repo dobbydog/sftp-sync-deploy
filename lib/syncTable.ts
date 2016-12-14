@@ -11,6 +11,8 @@ export class SyncTableEntry {
   remote: FileStatus = null;
   task: SyncTask;
 
+  constructor(public name: string) {}
+
   getTask(): SyncTask {
     if (this.task) {
       return this.task;
@@ -25,7 +27,7 @@ export class SyncTableEntry {
 
     if (this.local === 'ignore' || this.remote === 'error') {
       task.method = 'noop';
-    } else if (!this.remote || this.local === 'file' || this.local === 'dir' && this.remote === 'file') {
+    } else if (this.local === 'file') {
       task.method = 'upload';
     } else if (this.local === 'dir') {
       task.method = 'sync';
@@ -38,47 +40,54 @@ export class SyncTableEntry {
 }
 
 export class SyncTable {
-  private registry: {[filename: string]: SyncTableEntry} = {};
+  private registry: SyncTableEntry[] = [];
+
+  constructor(
+    public localPath: string,
+    public remotePath: string
+  ) {}
 
   get(filename: string, side: 'local' | 'remote'): FileStatus;
   get(filename: string): SyncTableEntry;
   get(filename?: string, side?: 'local' | 'remote') {
-    if (!this.registry[filename]) {
-      this.registry[filename] = new SyncTableEntry();
+    let entry: SyncTableEntry = this.registry.find(e => e.name === filename);
+
+    if (!entry) {
+      return null;
     }
 
-    if (side) {
-      return this.registry[filename][side];
-    } else {
-      return this.registry[filename];
-    }
+    return side ? entry[side] : entry;
   }
 
-  getAll(): {[filename: string]: SyncTableEntry} {
+  get all(): SyncTableEntry[] {
     return this.registry;
   }
 
   set(filename: string, side: 'local' | 'remote', stat: FileStatus): void;
   set(filename: string, entry: SyncTableEntry): void;
   set(filename: string, sideOrEntry: 'local' | 'remote' | SyncTableEntry, stat?: FileStatus) {
-    if (!this.registry[filename]) {
-      this.registry[filename] = new SyncTableEntry();
+    let entry = this.get(filename);
+
+    if (!entry) {
+      this.registry.push(new SyncTableEntry(filename));
+      entry = this.get(filename);
     }
 
     if (typeof sideOrEntry === 'object') {
-      this.registry[filename] = sideOrEntry;
+      entry.local = sideOrEntry.local;
+      entry.remote = sideOrEntry.remote;
     } else {
-      this.registry[filename][sideOrEntry] = stat;
+      entry[sideOrEntry] = stat;
     }
+  }
+
+  has(filename: string): boolean {
+    return this.registry.some(e => e.name === filename);
   }
 
   forEach(fn: (stat: SyncTableEntry, filename: string) => void) {
-    for (let n in this.registry) {
-      fn(this.registry[n], n);
+    for (let name in this.registry) {
+      fn(this.registry[name], name);
     }
-  }
-
-  files(): string[] {
-    return Object.keys(this.registry);
   }
 }

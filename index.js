@@ -8,7 +8,7 @@ function deploy(config, options) {
   console.log('* remote dir = '.gray + deployer.remoteDir);
   console.log('');
 
-  return deployer.start();
+  return deployer.sync();
 };
 
 deploy.deploy = deploy.default = deploy;
