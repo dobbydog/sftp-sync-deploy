@@ -121,6 +121,7 @@ export class SftpSync {
    * Close SSH2 connection
    */
   close(): void {
+    this.connected = false;
     this.client.end();
   }
 
@@ -169,7 +170,6 @@ export class SftpSync {
     })
     .finally(() => isRootTask ? this.close() : void 0);
   }
-
 
   /**
    * Upload the file
