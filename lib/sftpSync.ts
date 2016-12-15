@@ -155,7 +155,7 @@ export class SftpSync {
         }
 
         if (task.method === 'sync' && !entry.remote) {
-          preTasks = preTasks.then(() => this.sftpAsync.mkdir(remoteFilePath));
+          preTasks = preTasks.then(() => this.createRemoteDirectory(remoteFilePath));
         }
 
         return preTasks;
@@ -184,7 +184,7 @@ export class SftpSync {
         console.log('      file uploaded : '.yellow + util.normalizedRelativePath(localPath, this.localDir));
       })
       .finally(() => isRootTask ? this.close() : void 0);
-  };
+  }
 
   /**
    * Remove the specified remote file or directory
@@ -216,6 +216,20 @@ export class SftpSync {
    */
   noop(): Bluebird<void> {
     return Bluebird.resolve();
+  }
+
+  /**
+   * Create a directory on remote
+   */
+  private createRemoteDirectory(remotePath: string): Bluebird<void> {
+    if (!this.sftpAsync) {
+      return this.getAsyncSftp().then(() => this.createRemoteDirectory(remotePath));
+    }
+
+    return this.sftpAsync.mkdir(remotePath)
+      .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
+        throw new Error(`Cannnot create remote directory ${remotePath}`);
+      });
   }
 
   /**
@@ -255,24 +269,14 @@ export class SftpSync {
         .then(type => {
           table.set(file.filename, 'remote', type);
         })
-        .catch(err => {
-          if (err.code === SFTP_STATUS_CODE.PERMISSION_DENIED) {
-            table.set(file.filename, 'remote', 'error');
-          } else {
-            throw err;
-          }
+        .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
+          table.set(file.filename, 'remote', 'error');
         });
       })
-      .catch(err => {
-        if (err.code === SFTP_STATUS_CODE.NO_SUCH_FILE) {
-          return;
-        } else {
-          throw err;
-        }
-      });
+      .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => void 0);
 
     return Bluebird.join(readLocal(), readRemote()).return(table);
-  };
+  }
 
   /**
    * Get sftp stream
@@ -300,7 +304,7 @@ export class SftpSync {
       };
       return this.sftpAsync;
     });
-  };
+  }
 
   /**
    * Check if the path matches the exclude patterns
