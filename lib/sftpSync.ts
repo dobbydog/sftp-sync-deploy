@@ -166,10 +166,8 @@ export class SftpSync {
       if (!this.options.dryRun) {
         console.log('     sync completed : '.cyan + util.normalizedRelativePath(localPath, this.localDir));
       }
-      if (isRootTask) {
-        this.close();
-      }
-    });
+    })
+    .finally(() => isRootTask ? this.close() : void 0);
   }
 
 
@@ -184,11 +182,8 @@ export class SftpSync {
     return this.sftpAsync.fastPut(localPath, remotePath)
       .then(() => {
         console.log('      file uploaded : '.yellow + util.normalizedRelativePath(localPath, this.localDir));
-
-        if (isRootTask) {
-          this.close();
-        }
-      });
+      })
+      .finally(() => isRootTask ? this.close() : void 0);
   };
 
   /**
@@ -213,11 +208,7 @@ export class SftpSync {
 
     return this.sftpAsync.lstat(remotePath)
       .then(stat => stat.isDirectory() ? removeDir() : removeFile())
-      .then(() => {
-        if (isRootTask) {
-          this.close();
-        }
-      });
+      .finally(() => isRootTask ? this.close() : void 0);
   }
 
   /**
