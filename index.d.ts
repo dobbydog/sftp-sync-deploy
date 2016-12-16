@@ -1,3 +1,5 @@
+import * as Bluebird from 'bluebird';
+
 export interface SftpSyncConfig {
   host: string;
   port?: number;
@@ -14,6 +16,6 @@ export interface SftpSyncOptions {
   exclude?: string[];
 }
 
-export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Promise<boolean>;
+export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Bluebird<void>;
 
 export default deploy;
