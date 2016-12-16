@@ -2,7 +2,6 @@ import 'colors';
 import { Client, SFTP_STATUS_CODE } from 'ssh2';
 import { FileEntry } from 'ssh2-streams';
 import * as Bluebird from 'bluebird';
-import * as minimatch from 'minimatch';
 import * as path from 'path';
 import * as util from './util';
 import { AsyncSFTPWrapper } from './asyncSftpWrapper';
@@ -74,21 +73,10 @@ export class SftpSync {
 
     return Bluebird.resolve()
     .then(() => {
-      return fsAsync.lstat(this.localDir)
-      .catch(err => {
-        throw new Error(`localDir: ${this.localDir} does not exist.`);
-      })
-      .then(stats => {
-        if (!stats.isDirectory()) {
-          throw new Error(`localDir: ${this.localDir} is not a directory.`);
-        }
-      });
-    })
-    .then(() => {
       if (this.config.privateKey) {
         return fsAsync.readFile(this.config.privateKey)
         .catch(err => {
-          throw new Error(`privateKey: ${this.config.privateKey} does not exist.`);
+          throw new Error(`Local Error: Private key file not found ${this.config.privateKey}`);
         })
         .then(privKey => {
           privKeyRaw = privKey;
@@ -104,7 +92,9 @@ export class SftpSync {
           this.connected = true;
           resolve();
         })
-        .on('error', err => reject(err))
+        .on('error', err => {
+          reject(new Error(`Connection Error: ${err.message}`));
+        })
         .connect({
           host: this.config.host,
           port: this.config.port || 22,
@@ -129,46 +119,44 @@ export class SftpSync {
    * Sync with specified path
    */
   sync(localPath: string = this.localDir, remotePath: string = this.remoteDir, isRootTask: boolean = true): Bluebird<void> {
-    return this.buildSyncTable(localPath, remotePath)
-    .get('all')
-    .map<SyncTableEntry, void>(entry => {
-      let localFilePath = localPath + path.sep + entry.name;
-      let remoteFilePath = remotePath + '/' + entry.name;
+    let doTask = (entry: SyncTableEntry) => {
       let task = entry.getTask();
-      let args = [localFilePath, remoteFilePath, false];
-
-      if (this.options.dryRun) {
-        util.dryRunLog(util.normalizedRelativePath(localFilePath, this.localDir), entry);
-
-        if (task.method === 'sync') {
-          return this.sync(localFilePath, remoteFilePath, false);
-        } else {
-          return Bluebird.resolve();
-        }
-      }
+      let args = [entry.localPath, entry.remotePath, false];
 
       let preTask = () => {
         let preTasks = Bluebird.resolve();
 
         if (task.removeRemote) {
-          preTasks = preTasks.then(() => this.removeRemote(remoteFilePath, false));
+          preTasks = preTasks.then(() => this.removeRemote(entry.remotePath, false));
         }
 
-        if (task.method === 'sync' && !entry.remote) {
-          preTasks = preTasks.then(() => this.createRemoteDirectory(remoteFilePath));
+        if (task.method === 'sync' && !entry.remoteStat) {
+          preTasks = preTasks.then(() => this.createRemoteDirectory(entry.remotePath));
         }
 
         return preTasks;
       };
 
-      return preTask().then(() => this[task.method].apply(this, args));
-    })
-    .then(() => {
-      if (!this.options.dryRun) {
-        console.log('     sync completed : '.cyan + util.normalizedRelativePath(localPath, this.localDir));
+      if (this.options.dryRun) {
+        entry.dryRunLog();
+
+        if (task.method === 'sync') {
+          return this.sync(entry.localPath, entry.remotePath, false);
+        } else {
+          return Bluebird.resolve();
+        }
       }
-    })
-    .finally(() => isRootTask ? this.close() : void 0);
+
+      return preTask()
+        .then(() => this[task.method].apply(this, args))
+        .then(() => entry.liveRunLog());
+    };
+
+    return this.buildSyncTable(localPath, remotePath)
+      .get('all')
+      .map<SyncTableEntry, void>(doTask)
+      .return(void 0)
+      .finally(() => isRootTask ? this.close() : void 0);
   }
 
   /**
@@ -180,8 +168,11 @@ export class SftpSync {
     }
 
     return this.sftpAsync.fastPut(localPath, remotePath)
-      .then(() => {
-        console.log('      file uploaded : '.yellow + util.normalizedRelativePath(localPath, this.localDir));
+      .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
+        throw new Error(`Remote Error: Cannot upload file ${remotePath}`);
+      })
+      .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
+        throw new Error(`Remote Error: Cannot upload file. Permission denied ${remotePath}`);
       })
       .finally(() => isRootTask ? this.close() : void 0);
   }
@@ -196,15 +187,9 @@ export class SftpSync {
 
     let removeDir = () => this.sftpAsync.readdir(remotePath)
       .map<FileEntry, void>(file => this.removeRemote(remotePath + '/' + file.filename, false))
-      .then(() => this.sftpAsync.rmdir(remotePath))
-      .then(() => {
-        console.log(' remote dir removed : '.red + util.normalizedRelativePath(remotePath, this.remoteDir));
-      });
+      .then(() => this.sftpAsync.rmdir(remotePath));
 
-    let removeFile = () => this.sftpAsync.unlink(remotePath)
-      .then(() => {
-        console.log('remote file removed : '.red + util.normalizedRelativePath(remotePath, this.remoteDir));
-      });
+    let removeFile = () => this.sftpAsync.unlink(remotePath);
 
     return this.sftpAsync.lstat(remotePath)
       .then(stat => stat.isDirectory() ? removeDir() : removeFile())
@@ -228,7 +213,10 @@ export class SftpSync {
 
     return this.sftpAsync.mkdir(remotePath)
       .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
-        throw new Error(`Cannnot create remote directory ${remotePath}`);
+        throw new Error(`Remote Error: Cannnot create directory ${remotePath}`);
+      })
+      .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
+        throw new Error(`Remote Error: Cannnot create directory. Permission denied ${remotePath}`);
       });
   }
 
@@ -240,18 +228,29 @@ export class SftpSync {
       return this.getAsyncSftp().then(() => this.buildSyncTable(localPath, remotePath));
     }
 
-    let table = new SyncTable(localPath, remotePath);
+    let table = new SyncTable(localPath, remotePath, this.localDir, this.remoteDir);
 
     let readLocal = () => fsAsync.readdir(localPath)
       .map<string, void>(filename => {
         let fullPath = localPath + path.sep + filename;
 
-        return fsAsync.lstat(fullPath).then(stat => {
-          let isDir = stat.isDirectory();
-          let isExcluded = this.isExcluded(fullPath, isDir);
-
-          table.set(filename, 'local', isExcluded ? 'ignore' : isDir ? 'dir' : 'file');
-        });
+        return fsAsync.lstat(fullPath)
+          .then(stat => {
+            let entry = table.set(filename, {localStat: stat.isDirectory() ? 'dir' : 'file'});
+            entry.detectExclusion(this.options.exclude);
+          })
+          .catch({code: 'EPERM'}, err => {
+            table.set(filename, {localStat: 'error'});
+          });
+      })
+      .catch({code: 'ENOENT'}, err => {
+        throw new Error(`Local Error: No such directory ${localPath}`);
+      })
+      .catch({code: 'ENOTDIR'}, err => {
+        throw new Error(`Local Error: Not a directory ${localPath}`);
+      })
+      .catch({code: 'EPERM'}, err => {
+        throw new Error(`Local Error: Cannot read directory. Permission denied ${localPath}`);
       });
 
     let readRemote = () => this.sftpAsync.readdir(remotePath)
@@ -259,21 +258,26 @@ export class SftpSync {
         let fullPath = remotePath + '/' + file.filename;
 
         return this.sftpAsync.lstat(fullPath)
-        .then<FileStatus>(stat => {
-          if (stat.isDirectory()) {
-            return this.sftpAsync.readdir(fullPath).then(() => 'dir');
-          } else {
-            return this.sftpAsync.open(fullPath, 'r+').then(() => 'file');
-          }
-        })
-        .then(type => {
-          table.set(file.filename, 'remote', type);
-        })
-        .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
-          table.set(file.filename, 'remote', 'error');
-        });
+          .then<FileStatus>(stat => {
+            if (stat.isDirectory()) {
+              return this.sftpAsync.readdir(fullPath).then(() => 'dir');
+            } else {
+              return this.sftpAsync.open(fullPath, 'r+').then(() => 'file');
+            }
+          })
+          .then(type => {
+            table.set(file.filename, {remoteStat: type});
+          })
+          .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
+            table.set(file.filename, {remoteStat: 'error'});
+          });
       })
-      .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => void 0);
+      .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
+        throw new Error(`Remote Error: No such directory ${remotePath}`);
+      })
+      .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
+        throw new Error(`Remote Error: Cannnot read directory. Permission denied ${remotePath}`);
+      });
 
     return Bluebird.join(readLocal(), readRemote()).return(table);
   }
@@ -304,18 +308,5 @@ export class SftpSync {
       };
       return this.sftpAsync;
     });
-  }
-
-  /**
-   * Check if the path matches the exclude patterns
-   */
-  private isExcluded(localPath: string, isDir: boolean): boolean {
-    let pathForMatch = util.normalizedRelativePath(localPath, this.localDir);
-
-    if (isDir) {
-      pathForMatch += '/';
-    }
-
-    return this.options.exclude.some(pattern => minimatch(pathForMatch, pattern));
   }
 }
