@@ -1,20 +1,8 @@
 import * as Bluebird from 'bluebird';
+import { SftpSyncConfig, SftpSyncOptions } from './lib/config';
 
-export interface SftpSyncConfig {
-  host: string;
-  port?: number;
-  username: string;
-  password?: string;
-  privateKey?: string;
-  passphrase?: string;
-  localDir: string;
-  remoteDir: string;
-}
-
-export interface SftpSyncOptions {
-  dryRun?: boolean;
-  exclude?: string[];
-}
+export { SftpSync } from './lib/sftpSync';
+export { SftpSyncConfig, SftpSyncOptions };
 
 export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Bluebird<void>;
 

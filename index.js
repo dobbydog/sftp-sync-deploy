@@ -12,4 +12,5 @@ function deploy(config, options) {
 };
 
 deploy.deploy = deploy.default = deploy;
+deploy.SftpSync = SftpSync;
 module.exports = deploy;
