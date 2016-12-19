@@ -8,19 +8,19 @@ Sync local files to remote using SFTP.
 const deploy = require('sftp-sync-deploy');
 
 let config = {
-  host: 'example.com',            // required.
-  port: 22,                       // optional. Default to 22.
-  username: 'user',               // required.
-  password: 'password',           // optional.
-  privateKey: '/pass/to/key.pem', // optional.
-  passphrase: 'passphrase',       // optional.
-  localDir: 'dist',               // required. Absolute or relative to cwd
-  remoteDir: '/pass/to/dest'      // required. Absolute path only. 
+  host: 'example.com',            // Required.
+  port: 22,                       // Optional. Default to 22
+  username: 'user',               // Required.
+  password: 'password',           // Optional.
+  privateKey: '/pass/to/key.pem', // Optional.
+  passphrase: 'passphrase',       // Optional.
+  localDir: 'dist',               // Required. Absolute or relative to cwd
+  remoteDir: '/pass/to/dest'      // Required. Absolute path only.
 };
 
 let options = {
-  dryRun: false,                  // enable dry-run mode
-  exclude: [                      // exclude pattern (glob)
+  dryRun: false,                  // Enable dry-run mode. Default to false
+  exclude: [                      // exclude patterns (glob)
     'node_modules',
     'src/**/*.spec.ts'
   ]
@@ -55,11 +55,11 @@ Outputs the tasks to be done for each file in following format. Any changes of t
 
 ### Output example
 ```
-# Local is a file. (upload the file)
+# Local is a file (upload the file)
 [ F | F ] index.html
           -> upload
 
-# Local is a directory. (sync recursively)
+# Local is a directory (sync recursively)
 [ D | D ] lib
           -> sync
 
@@ -67,17 +67,17 @@ Outputs the tasks to be done for each file in following format. Any changes of t
 [ X |   ] node_modules
           -> ignore
 
-# Remote exists but local doesn't, or is excluded. (remove the remote file or directory)
+# Remote exists but local doesn't, or is excluded (remove the remote file or directory)
 [   | F ] index.html.bak
           -> remove remote
 
 [ X | D ] .bin
           -> remove remote
 
-# Local and remote have the same name but the different types. (remove remote then upload local)
+# Local and remote have the same name but different types (remove remote then upload local)
 [ F | D ] test
           -> remove remote and upload
 
-# Permission error in the remote server. (ignored)
+# Permission error on a remote server (ignored)
 [ F | ! ] secret.txt
           -> denied
