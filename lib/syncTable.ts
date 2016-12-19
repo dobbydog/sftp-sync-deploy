@@ -1,6 +1,5 @@
 import * as minimatch from 'minimatch';
 import * as path from 'path';
-import * as util from './util';
 
 export type FileStatus = 'file' | 'dir' | 'ignore' | 'error';
 export type TaskType = 'upload' | 'sync' | 'noop';
@@ -12,8 +11,7 @@ export interface SyncTask {
 }
 
 export class SyncTableEntry {
-  localPath: string;
-  remotePath: string;
+  path: string;
   localStat: FileStatus = null;
   remoteStat: FileStatus = null;
   task: SyncTask;
@@ -22,8 +20,7 @@ export class SyncTableEntry {
     private table: SyncTable,
     public name: string
   ) {
-    this.localPath = table.localPath + path.sep + name;
-    this.remotePath = table.remotePath + '/' + name;
+    this.path = path.posix.join(table.relativePath || '.', name);
   }
 
   /**
@@ -63,7 +60,7 @@ export class SyncTableEntry {
    */
   liveRunLog(): void {
     let task = this.getTask();
-    let displayName = this.getRelativePath();
+    let displayName = this.path;
 
     if (task.removeRemote) {
       if (this.remoteStat === 'dir') {
@@ -114,7 +111,7 @@ export class SyncTableEntry {
       taskName = task.method;
     }
 
-    console.log(`[ ${label(this.localStat)} | ${label(this.remoteStat)} ] ${this.getRelativePath()}`);
+    console.log(`[ ${label(this.localStat)} | ${label(this.remoteStat)} ] ${this.path}`);
     console.log(`          -> ${taskName}`.magenta);
     console.log('');
   }
@@ -123,22 +120,15 @@ export class SyncTableEntry {
    * Check if the path matches the exclude patterns
    */
   detectExclusion(patterns: string[]) {
-    let pathForMatch = this.getRelativePath();
+    let pathForMatch = this.path;
 
     if (this.localStat === 'dir') {
-      pathForMatch += '/';
+      pathForMatch += path.posix.sep;
     }
 
     if (patterns.some(pattern => minimatch(pathForMatch, pattern))) {
       this.localStat = 'ignore';
     }
-  }
-
-  /**
-   * Get a path string relative to project root
-   */
-  getRelativePath(): string {
-    return this.remotePath.replace(new RegExp(util.escapeRegExp(this.table.remoteRoot)), '').substr(1);
   }
 }
 
@@ -146,10 +136,7 @@ export class SyncTable {
   private registry: SyncTableEntry[] = [];
 
   constructor(
-    public localPath: string,
-    public remotePath: string,
-    public localRoot?: string,
-    public remoteRoot?: string
+    public relativePath: string
   ) {}
 
   get(filename: string): SyncTableEntry {

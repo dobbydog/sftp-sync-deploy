@@ -37,12 +37,12 @@ export class SftpSync {
   /**
    * Local directory root
    */
-  localDir: string;
+  localRoot: string;
 
   /**
    * Remote directory root
    */
-  remoteDir: string;
+  remoteRoot: string;
 
   /**
    * Whether a SSH2 connection has been made or not
@@ -61,8 +61,8 @@ export class SftpSync {
     }, options);
 
     this.client = new Client;
-    this.localDir = util.chomp(path.resolve(this.config.localDir), path.sep);
-    this.remoteDir = util.chomp(this.config.remoteDir, '/');
+    this.localRoot = util.chomp(path.resolve(this.config.localDir), path.sep);
+    this.remoteRoot = util.chomp(this.config.remoteDir, path.posix.sep);
   }
 
   /**
@@ -118,20 +118,20 @@ export class SftpSync {
   /**
    * Sync with specified path
    */
-  sync(localPath: string = this.localDir, remotePath: string = this.remoteDir, isRootTask: boolean = true): Bluebird<void> {
+  sync(relativePath: string = '', isRootTask: boolean = true): Bluebird<void> {
     let doTask = (entry: SyncTableEntry) => {
       let task = entry.getTask();
-      let args = [entry.localPath, entry.remotePath, false];
+      let args = [entry.path, false];
 
       let preTask = () => {
         let preTasks = Bluebird.resolve();
 
         if (task.removeRemote) {
-          preTasks = preTasks.then(() => this.removeRemote(entry.remotePath, false));
+          preTasks = preTasks.then(() => this.removeRemote(entry.path, false));
         }
 
-        if (task.method === 'sync' && !entry.remoteStat) {
-          preTasks = preTasks.then(() => this.createRemoteDirectory(entry.remotePath));
+        if (task.method === 'sync' && entry.remoteStat !== 'dir') {
+          preTasks = preTasks.then(() => this.createRemoteDirectory(entry.path));
         }
 
         return preTasks;
@@ -141,7 +141,7 @@ export class SftpSync {
         entry.dryRunLog();
 
         if (task.method === 'sync') {
-          return this.sync(entry.localPath, entry.remotePath, false);
+          return this.sync(entry.path, false);
         } else {
           return Bluebird.resolve();
         }
@@ -152,7 +152,7 @@ export class SftpSync {
         .then(() => entry.liveRunLog());
     };
 
-    return this.buildSyncTable(localPath, remotePath)
+    return this.buildSyncTable(relativePath)
       .get('all')
       .map<SyncTableEntry, void>(doTask)
       .return(void 0)
@@ -162,10 +162,13 @@ export class SftpSync {
   /**
    * Upload the file
    */
-  upload(localPath: string, remotePath: string, isRootTask: boolean = true): Bluebird<void> {
+  upload(relativePath: string, isRootTask: boolean = true): Bluebird<void> {
     if (!this.sftpAsync) {
-      return this.getAsyncSftp().then(() => this.upload(localPath, remotePath, isRootTask));
+      return this.getAsyncSftp().then(() => this.upload(relativePath, isRootTask));
     }
+
+    let localPath = this.localFullPath(relativePath);
+    let remotePath = this.remoteFullPath(relativePath);
 
     return this.sftpAsync.fastPut(localPath, remotePath)
       .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
@@ -178,15 +181,17 @@ export class SftpSync {
   }
 
   /**
-   * Remove the specified remote file or directory
+   * Remove a remote file or directory
    */
-  removeRemote(remotePath: string, isRootTask: boolean = true): Bluebird<void> {
+  removeRemote(relativePath: string, isRootTask: boolean = true): Bluebird<void> {
     if (!this.sftpAsync) {
-      return this.getAsyncSftp().then(() => this.removeRemote(remotePath, isRootTask));
+      return this.getAsyncSftp().then(() => this.removeRemote(relativePath, isRootTask));
     }
 
+    let remotePath = this.remoteFullPath(relativePath);
+
     let removeDir = () => this.sftpAsync.readdir(remotePath)
-      .map<FileEntry, void>(file => this.removeRemote(remotePath + '/' + file.filename, false))
+      .map<FileEntry, void>(file => this.removeRemote(path.posix.join(relativePath, file.filename), false))
       .then(() => this.sftpAsync.rmdir(remotePath));
 
     let removeFile = () => this.sftpAsync.unlink(remotePath);
@@ -197,19 +202,21 @@ export class SftpSync {
   }
 
   /**
-   * dummy operation
+   * No operation
    */
   noop(): Bluebird<void> {
     return Bluebird.resolve();
   }
 
   /**
-   * Create a directory on remote
+   * Create a directory on a remote host
    */
-  private createRemoteDirectory(remotePath: string): Bluebird<void> {
+  private createRemoteDirectory(relativePath: string): Bluebird<void> {
     if (!this.sftpAsync) {
-      return this.getAsyncSftp().then(() => this.createRemoteDirectory(remotePath));
+      return this.getAsyncSftp().then(() => this.createRemoteDirectory(relativePath));
     }
+
+    let remotePath = this.remoteFullPath(relativePath);
 
     return this.sftpAsync.mkdir(remotePath)
       .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
@@ -221,18 +228,20 @@ export class SftpSync {
   }
 
   /**
-   * Build a local and remote files status report for specified path
+   * Build a local and remote files status report for the specified path
    */
-  private buildSyncTable(localPath: string, remotePath: string): Bluebird<SyncTable> {
+  private buildSyncTable(relativePath: string): Bluebird<SyncTable> {
     if (!this.sftpAsync) {
-      return this.getAsyncSftp().then(() => this.buildSyncTable(localPath, remotePath));
+      return this.getAsyncSftp().then(() => this.buildSyncTable(relativePath));
     }
 
-    let table = new SyncTable(localPath, remotePath, this.localDir, this.remoteDir);
+    let localPath = this.localFullPath(relativePath);
+    let remotePath = this.remoteFullPath(relativePath);
+    let table = new SyncTable(relativePath);
 
     let readLocal = () => fsAsync.readdir(localPath)
       .map<string, void>(filename => {
-        let fullPath = localPath + path.sep + filename;
+        let fullPath = path.join(localPath, filename);
 
         return fsAsync.lstat(fullPath)
           .then(stat => {
@@ -255,7 +264,7 @@ export class SftpSync {
 
     let readRemote = () => this.sftpAsync.readdir(remotePath)
       .map<FileEntry, void>(file => {
-        let fullPath = remotePath + '/' + file.filename;
+        let fullPath = path.posix.join(remotePath, file.filename);
 
         return this.sftpAsync.lstat(fullPath)
           .then<FileStatus>(stat => {
@@ -273,7 +282,9 @@ export class SftpSync {
           });
       })
       .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
-        throw new Error(`Remote Error: No such directory ${remotePath}`);
+        if (!this.options.dryRun) {
+          throw new Error(`Remote Error: No such directory ${remotePath}`);
+        }
       })
       .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
         throw new Error(`Remote Error: Cannnot read directory. Permission denied ${remotePath}`);
@@ -283,7 +294,7 @@ export class SftpSync {
   }
 
   /**
-   * Get sftp stream
+   * Get an async version of sftp stream
    */
   private getAsyncSftp(): Bluebird<AsyncSFTPWrapper> {
     if (this.sftpAsync) {
@@ -297,5 +308,19 @@ export class SftpSync {
     const sftp = Bluebird.promisify(this.client.sftp, {context: this.client});
 
     return sftp().then(sftp => this.sftpAsync = new AsyncSFTPWrapper(sftp));
+  }
+
+  /**
+   * Get a full path of a local file or directory
+   */
+  private localFullPath(relativePath: string): string {
+    return path.join(this.localRoot, relativePath);
+  }
+
+  /**
+   * Get a full path of a local file or directory
+   */
+  private remoteFullPath(relativePath: string): string {
+    return path.posix.join(this.remoteRoot, relativePath);
   }
 }
