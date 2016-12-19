@@ -296,17 +296,6 @@ export class SftpSync {
 
     const sftp = Bluebird.promisify(this.client.sftp, {context: this.client});
 
-    return sftp().then(sftp => {
-      this.sftpAsync = {
-        fastPut: Bluebird.promisify(sftp.fastPut, {context: sftp}),
-        open: Bluebird.promisify(sftp.open, {context: sftp}),
-        mkdir: Bluebird.promisify(sftp.mkdir, {context: sftp}),
-        rmdir: Bluebird.promisify(sftp.rmdir, {context: sftp}),
-        readdir: Bluebird.promisify(sftp.readdir, {context: sftp}),
-        lstat: Bluebird.promisify(sftp.lstat, {context: sftp}),
-        unlink: Bluebird.promisify(sftp.unlink, {context: sftp})
-      };
-      return this.sftpAsync;
-    });
+    return sftp().then(sftp => this.sftpAsync = new AsyncSFTPWrapper(sftp));
   }
 }
