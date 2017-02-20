@@ -5,6 +5,7 @@ export interface SftpSyncConfig {
   password?: string;
   privateKey?: string;
   passphrase?: string;
+  agent?: string;
   localDir: string;
   remoteDir: string;
 }
