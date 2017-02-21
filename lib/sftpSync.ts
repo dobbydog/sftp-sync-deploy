@@ -160,7 +160,7 @@ export class SftpSync {
   }
 
   /**
-   * Upload the file
+   * Upload file/directory
    */
   upload(relativePath: string, isRootTask: boolean = true): Bluebird<void> {
     if (!this.sftpAsync) {
@@ -170,7 +170,13 @@ export class SftpSync {
     let localPath = this.localFullPath(relativePath);
     let remotePath = this.remoteFullPath(relativePath);
 
-    return this.sftpAsync.fastPut(localPath, remotePath)
+    let uploadDir = () => fsAsync.readdir(localPath)
+      .map<string, void>(filename => this.upload(path.posix.join(relativePath, filename), false))
+      .return(void 0);
+
+    let uploadFile = () => this.sftpAsync.fastPut(localPath, remotePath);
+
+    return fsAsync.lstat(localPath).then(stat => stat.isDirectory() ? uploadDir() : uploadFile())
       .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {
         throw new Error(`Remote Error: Cannot upload file ${remotePath}`);
       })
