@@ -12,10 +12,11 @@ let config = {
   port: 22,                       // Optional. Default to 22
   username: 'user',               // Required.
   password: 'password',           // Optional.
-  privateKey: '/pass/to/key.pem', // Optional.
+  privateKey: '/path/to/key.pem', // Optional.
   passphrase: 'passphrase',       // Optional.
+  agent: '/path/to/agent.sock',   // Optional, path to the ssh-agent socket.
   localDir: 'dist',               // Required. Absolute or relative to cwd
-  remoteDir: '/pass/to/dest'      // Required. Absolute path only.
+  remoteDir: '/path/to/dest'      // Required. Absolute path only.
 };
 
 let options = {
