@@ -16,7 +16,8 @@
   "files": [
     "index.js",
     "index.d.ts",
-    "lib",
+    "lib/*.js",
+    "lib/*.d.ts",
     "README.md",
     "LICENSE"
   ],
