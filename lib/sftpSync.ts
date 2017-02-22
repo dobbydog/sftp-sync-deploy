@@ -52,7 +52,7 @@ export class SftpSync {
   /**
    * Constructor
    */
-  constructor(config: SftpSyncConfig, options: SftpSyncOptions) {
+  constructor(config: SftpSyncConfig, options?: SftpSyncOptions) {
     this.config = config;
 
     this.options = Object.assign({
