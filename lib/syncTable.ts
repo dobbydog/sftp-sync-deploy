@@ -176,7 +176,8 @@ export class SyncTable {
     return this.registry.some(e => e.name === filename);
   }
 
-  forEach(fn: (stat: SyncTableEntry) => void) {
+  forEach(fn: (stat: SyncTableEntry) => void): SyncTable {
     this.registry.forEach(fn);
+    return this;
   }
 }

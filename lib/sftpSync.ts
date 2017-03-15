@@ -253,8 +253,7 @@ export class SftpSync {
 
         return fsAsync.lstat(fullPath)
           .then(stat => {
-            let entry = table.set(filename, {localStat: stat.isDirectory() ? 'dir' : 'file'});
-            entry.detectExclusion();
+            table.set(filename, {localStat: stat.isDirectory() ? 'dir' : 'file'});
           })
           .catch({code: 'EPERM'}, err => {
             table.set(filename, {localStat: 'error'});
@@ -298,7 +297,8 @@ export class SftpSync {
         throw new Error(`Remote Error: Cannnot read directory. Permission denied ${remotePath}`);
       });
 
-    return Bluebird.join(readLocal(), readRemote()).return(table);
+    return Bluebird.join(readLocal(), readRemote())
+      .then(() => table.forEach(entry => entry.detectExclusion()));
   }
 
   /**
