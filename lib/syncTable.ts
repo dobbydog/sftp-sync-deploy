@@ -1,7 +1,8 @@
 import * as minimatch from 'minimatch';
 import * as path from 'path';
+import { SftpSyncOptions } from './config';
 
-export type FileStatus = 'file' | 'dir' | 'ignore' | 'error';
+export type FileStatus = 'file' | 'dir' | 'excluded' | 'error';
 export type TaskType = 'upload' | 'sync' | 'noop';
 
 export interface SyncTask {
@@ -32,17 +33,21 @@ export class SyncTableEntry {
     }
 
     let task: SyncTask = {method: undefined, removeRemote: false, hasError: false};
+    let options = this.table.options;
 
     if (this.localStat === 'error' || this.remoteStat === 'error') {
       task.hasError = true;
     }
 
-    if (this.remoteStat !== null && !task.hasError &&
-      (!this.localStat || this.localStat === 'ignore' || this.localStat !== this.remoteStat)) {
+    if (this.remoteStat !== null && !task.hasError && this.localStat !== this.remoteStat) {
       task.removeRemote = true;
     }
 
-    if (this.localStat === 'ignore' || task.hasError) {
+    if (this.localStat === 'excluded' && options.excludeMode === 'ignore') {
+      task.removeRemote = false;
+    }
+
+    if (this.localStat === 'excluded' || task.hasError) {
       task.method = 'noop';
     } else if (this.localStat === 'file') {
       task.method = 'upload';
@@ -92,7 +97,7 @@ export class SyncTableEntry {
       switch (stat) {
         case 'dir': return 'D'.cyan;
         case 'file': return 'F'.yellow;
-        case 'ignore': return 'X'.gray;
+        case 'excluded': return 'X'.gray;
         case 'error': return '!'.red;
         default: return ' ';
       }
@@ -119,15 +124,16 @@ export class SyncTableEntry {
   /**
    * Check if the path matches the exclude patterns
    */
-  detectExclusion(patterns: string[]) {
+  detectExclusion() {
     let pathForMatch = this.path;
+    let patterns = this.table.options.exclude;
 
     if (this.localStat === 'dir') {
       pathForMatch += path.posix.sep;
     }
 
     if (patterns.some(pattern => minimatch(pathForMatch, pattern))) {
-      this.localStat = 'ignore';
+      this.localStat = 'excluded';
     }
   }
 }
@@ -136,7 +142,8 @@ export class SyncTable {
   private registry: SyncTableEntry[] = [];
 
   constructor(
-    public relativePath: string
+    public relativePath: string,
+    public options: SftpSyncOptions
   ) {}
 
   get(filename: string): SyncTableEntry {

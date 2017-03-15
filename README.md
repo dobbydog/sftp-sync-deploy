@@ -9,14 +9,14 @@ const deploy = require('sftp-sync-deploy');
 
 let config = {
   host: 'example.com',            // Required.
-  port: 22,                       // Optional. Default to 22
+  port: 22,                       // Optional, Default to 22.
   username: 'user',               // Required.
   password: 'password',           // Optional.
   privateKey: '/path/to/key.pem', // Optional.
   passphrase: 'passphrase',       // Optional.
   agent: '/path/to/agent.sock',   // Optional, path to the ssh-agent socket.
-  localDir: 'dist',               // Required. Absolute or relative to cwd
-  remoteDir: '/path/to/dest'      // Required. Absolute path only.
+  localDir: 'dist',               // Required, Absolute or relative to cwd.
+  remoteDir: '/path/to/dest'      // Required, Absolute path only.
 };
 
 let options = {
@@ -24,7 +24,8 @@ let options = {
   exclude: [                      // exclude patterns (glob)
     'node_modules',
     'src/**/*.spec.ts'
-  ]
+  ],
+  excludeMode: 'remove'           // Behavior for excluded files ('remove' or 'ignore'), Default to 'remove'.
 };
 
 deploy(config, options).then(() => {
@@ -68,12 +69,14 @@ Outputs the tasks to be done for each file in following format. Any changes of t
 [ X |   ] node_modules
           -> ignore
 
-# Remote exists but local doesn't, or is excluded (remove the remote file or directory)
+# Remote exists and local doesn't (remove the remote file or directory)
 [   | F ] index.html.bak
           -> remove remote
 
+# Remote exists and local is excluded (operation depends on excludeMode option)
 [ X | D ] .bin
-          -> remove remote
+          -> remove remote # if excludeMode is 'remove'
+          -> ignore        # if excludeMode is 'ignore'
 
 # Local and remote have the same name but different types (remove remote then upload local)
 [ F | D ] test

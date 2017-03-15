@@ -57,7 +57,8 @@ export class SftpSync {
 
     this.options = Object.assign({
       dryRun: false,
-      exclude: []
+      exclude: [],
+      excludeMode: 'remove'
     }, options);
 
     this.client = new Client;
@@ -244,7 +245,7 @@ export class SftpSync {
 
     let localPath = this.localFullPath(relativePath);
     let remotePath = this.remoteFullPath(relativePath);
-    let table = new SyncTable(relativePath);
+    let table = new SyncTable(relativePath, this.options);
 
     let readLocal = () => fsAsync.readdir(localPath)
       .map<string, void>(filename => {
@@ -253,7 +254,7 @@ export class SftpSync {
         return fsAsync.lstat(fullPath)
           .then(stat => {
             let entry = table.set(filename, {localStat: stat.isDirectory() ? 'dir' : 'file'});
-            entry.detectExclusion(this.options.exclude);
+            entry.detectExclusion();
           })
           .catch({code: 'EPERM'}, err => {
             table.set(filename, {localStat: 'error'});
