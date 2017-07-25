@@ -14,5 +14,5 @@ export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Blueb
 };
 
 export default deploy;
-export * from './lib/SftpSync';
+export * from './lib/sftpSync';
 export * from './lib/config';
