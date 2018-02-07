@@ -1,4 +1,3 @@
-import 'colors';
 import { Client, SFTP_STATUS_CODE } from 'ssh2';
 import { FileEntry } from 'ssh2-streams';
 import * as Bluebird from 'bluebird';

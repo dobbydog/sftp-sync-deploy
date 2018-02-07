@@ -1,4 +1,5 @@
 import * as minimatch from 'minimatch';
+import chalk from 'chalk';
 import * as path from 'path';
 import { SftpSyncOptions } from './config';
 
@@ -77,22 +78,22 @@ export class SyncTableEntry {
 
     if (task.removeRemote) {
       if (this.remoteStat === 'dir') {
-        console.log(' remote dir removed : '.red + displayName);
+        console.log(chalk.red(' remote dir removed : ') + displayName);
       } else {
-        console.log('remote file removed : '.red + displayName);
+        console.log(chalk.red('remote file removed : ') + displayName);
       }
     } else if (task.hasError) {
-      console.log(`              error : ${displayName}`.bgRed);
+      console.log(chalk.bgRed(`              error : ${displayName}`));
     } else if (task.skip) {
-      console.log('            skipped : '.gray + displayName);
+      console.log(chalk.gray('            skipped : ') + displayName);
     } else if (task.method === 'noop') {
-      console.log('            ignored : '.gray + displayName);
+      console.log(chalk.gray('            ignored : ') + displayName);
     }
 
     if (task.method === 'sync') {
-      console.log('     sync completed : '.cyan + displayName);
+      console.log(chalk.cyan('     sync completed : ') + displayName);
     } else if (task.method === 'upload') {
-      console.log('      file uploaded : '.yellow + displayName);
+      console.log(chalk.yellow('      file uploaded : ') + displayName);
     }
   }
 
@@ -105,10 +106,10 @@ export class SyncTableEntry {
 
     function label(stat: FileStatus): string {
       switch (stat) {
-        case 'dir': return 'D'.cyan;
-        case 'file': return 'F'.yellow;
-        case 'excluded': return 'X'.gray;
-        case 'error': return '!'.red;
+        case 'dir': return chalk.cyan('D');
+        case 'file': return chalk.yellow('F');
+        case 'excluded': return chalk.gray('X');
+        case 'error': return chalk.red('!');
         default: return ' ';
       }
     }
@@ -129,7 +130,7 @@ export class SyncTableEntry {
     }
 
     console.log(`[ ${label(this.localStat)} | ${label(this.remoteStat)} ] ${this.path}`);
-    console.log(`          -> ${taskName}`.magenta);
+    console.log(chalk.magenta(`          -> ${taskName}`));
     console.log('');
   }
 

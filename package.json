@@ -3,9 +3,11 @@
   "version": "0.7.0",
   "description": "Sync local files to remote using SFTP.",
   "main": "index.js",
+  "types": "index.d.ts",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "prepublish": "tsc && tsc -d"
+    "build": "tsc && tsc -d",
+    "prepare": "npm run build"
   },
   "author": "dobbydog",
   "license": "MIT",
@@ -23,17 +25,16 @@
   ],
   "dependencies": {
     "@types/bluebird": "^3.0.36",
-    "@types/colors": "^0.6.33",
-    "@types/minimatch": "^2.0.29",
-    "@types/node": "^6.0.51",
+    "@types/minimatch": "^3.0.3",
+    "@types/node": "^9.4.1",
     "@types/ssh2": "^0.5.33",
     "@types/ssh2-streams": "^0.1.2",
     "bluebird": "^3.4.6",
-    "colors": "^1.1.2",
+    "chalk": "^2.3.0",
     "minimatch": "^3.0.3",
     "ssh2": "^0.5.4"
   },
   "devDependencies": {
-    "typescript": "^2.1.4"
+    "typescript": "^2.7.1"
   }
 }
