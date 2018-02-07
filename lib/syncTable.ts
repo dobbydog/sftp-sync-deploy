@@ -9,12 +9,15 @@ export interface SyncTask {
   method: TaskType;
   removeRemote: boolean;
   hasError: boolean;
+  skip: boolean;
 }
 
 export class SyncTableEntry {
   path: string;
   localStat: FileStatus = null;
   remoteStat: FileStatus = null;
+  localTimestamp: number = null;
+  remoteTimestamp: number = null;
   task: SyncTask;
 
   constructor(
@@ -32,7 +35,7 @@ export class SyncTableEntry {
       return this.task;
     }
 
-    let task: SyncTask = {method: undefined, removeRemote: false, hasError: false};
+    let task: SyncTask = {method: undefined, removeRemote: false, hasError: false, skip: false};
     let options = this.table.options;
 
     if (this.localStat === 'error' || this.remoteStat === 'error') {
@@ -50,7 +53,12 @@ export class SyncTableEntry {
     if (this.localStat === 'excluded' || task.hasError) {
       task.method = 'noop';
     } else if (this.localStat === 'file') {
-      task.method = 'upload';
+      if (!options.forceUpload && this.localTimestamp <= this.remoteTimestamp) {
+        task.skip = true;
+        task.method = 'noop';
+      } else {
+        task.method = 'upload';
+      }
     } else if (this.localStat === 'dir') {
       task.method = 'sync';
     } else {
@@ -75,6 +83,8 @@ export class SyncTableEntry {
       }
     } else if (task.hasError) {
       console.log(`              error : ${displayName}`.bgRed);
+    } else if (task.skip) {
+      console.log('            skipped : '.gray + displayName);
     } else if (task.method === 'noop') {
       console.log('            ignored : '.gray + displayName);
     }
@@ -110,6 +120,8 @@ export class SyncTableEntry {
       if (task.method !== 'noop') {
         taskName += ' and ' + task.method;
       }
+    } else if (task.skip) {
+      taskName = 'skip';
     } else if (task.method === 'noop') {
       taskName = 'ignore';
     } else {

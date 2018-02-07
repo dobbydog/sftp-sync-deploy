@@ -14,4 +14,5 @@ export interface SftpSyncOptions {
   dryRun?: boolean;
   exclude?: string[];
   excludeMode?: 'ignore'|'remove';
+  forceUpload?: boolean;
 }

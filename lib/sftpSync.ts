@@ -253,10 +253,14 @@ export class SftpSync {
 
         return fsAsync.lstat(fullPath)
           .then(stat => {
-            table.set(filename, {localStat: stat.isDirectory() ? 'dir' : 'file'});
+            const mtime = Math.floor(new Date(stat.mtime).getTime() / 1000);
+            table.set(filename, {
+              localStat: stat.isDirectory() ? 'dir' : 'file',
+              localTimestamp: mtime
+            });
           })
           .catch({code: 'EPERM'}, err => {
-            table.set(filename, {localStat: 'error'});
+            table.set(filename, {localStat: 'error', localTimestamp: null});
           });
       })
       .catch({code: 'ENOENT'}, err => {
@@ -274,18 +278,21 @@ export class SftpSync {
         let fullPath = path.posix.join(remotePath, file.filename);
 
         return this.sftpAsync.lstat(fullPath)
-          .then<FileStatus>(stat => {
+          .then(stat => {
             if (stat.isDirectory()) {
-              return this.sftpAsync.readdir(fullPath).then(() => 'dir');
+              return this.sftpAsync.readdir(fullPath).then(() => stat);
             } else {
-              return this.sftpAsync.open(fullPath, 'r+').then(() => 'file');
+              return this.sftpAsync.open(fullPath, 'r+').then(() => stat);
             }
           })
-          .then(type => {
-            table.set(file.filename, {remoteStat: type});
+          .then(stat => {
+            table.set(file.filename, {
+              remoteStat: stat.isDirectory() ? 'dir' : 'file',
+              remoteTimestamp: stat.mtime
+            });
           })
           .catch({code: SFTP_STATUS_CODE.PERMISSION_DENIED}, err => {
-            table.set(file.filename, {remoteStat: 'error'});
+            table.set(file.filename, {remoteStat: 'error', remoteTimestamp: null});
           });
       })
       .catch({code: SFTP_STATUS_CODE.NO_SUCH_FILE}, err => {

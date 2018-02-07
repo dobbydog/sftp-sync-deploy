@@ -25,7 +25,8 @@ let options = {
     'node_modules',
     'src/**/*.spec.ts'
   ],
-  excludeMode: 'remove'           // Behavior for excluded files ('remove' or 'ignore'), Default to 'remove'.
+  excludeMode: 'remove',          // Behavior for excluded files ('remove' or 'ignore'), Default to 'remove'.
+  forceUpload: false              // Force uploading all files, Default to false(upload only newer files).
 };
 
 deploy(config, options).then(() => {
