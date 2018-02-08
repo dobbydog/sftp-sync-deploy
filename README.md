@@ -5,7 +5,7 @@ Sync local files to remote using SFTP.
 
 ### Javscript
 ```js
-const deploy = require('sftp-sync-deploy');
+const { deploy } = require('sftp-sync-deploy');
 
 let config = {
   host: 'example.com',            // Required.
