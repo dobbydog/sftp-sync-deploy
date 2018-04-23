@@ -57,7 +57,8 @@ export class SftpSync {
     this.options = Object.assign({
       dryRun: false,
       exclude: [],
-      excludeMode: 'remove'
+      excludeMode: 'remove',
+      removeExtraFiles: true
     }, options);
 
     this.client = new Client;
