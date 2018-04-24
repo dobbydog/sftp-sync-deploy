@@ -43,7 +43,7 @@ export class SyncTableEntry {
       task.hasError = true;
     }
 
-    if (this.remoteStat !== null && !task.hasError && this.localStat !== this.remoteStat) {
+    if (this.remoteStat !== null && !task.hasError && this.localStat !== this.remoteStat && options.removeExtraFiles) {
       task.removeRemote = true;
     }
 
