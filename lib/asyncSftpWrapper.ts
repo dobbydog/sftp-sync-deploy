@@ -1,23 +1,23 @@
-import * as Bluebird from 'bluebird';
+import * as util from 'util';
 import { SFTPWrapper } from 'ssh2';
 import { InputAttributes, TransferOptions, FileEntry, Stats } from 'ssh2-streams';
 
 export class AsyncSFTPWrapper {
-  fastPut: (localPath: string, remotePath: string, options?: TransferOptions) => Bluebird<void>;
-  open: (filename: string, mode: string, attributes?: InputAttributes) => Bluebird<Buffer>;
-  mkdir: (path: string, attributes?: InputAttributes) => Bluebird<void>;
-  rmdir: (path: string) => Bluebird<void>;
-  readdir: (location: string | Buffer) => Bluebird<FileEntry[]>;
-  unlink: (path: string) => Bluebird<void>;
-  lstat: (path: string) => Bluebird<Stats>;
+  fastPut: (localPath: string, remotePath: string, options?: TransferOptions) => Promise<void>;
+  open: (filename: string, mode: string, attributes?: InputAttributes) => Promise<Buffer>;
+  mkdir: (path: string, attributes?: InputAttributes) => Promise<void>;
+  rmdir: (path: string) => Promise<void>;
+  readdir: (location: string | Buffer) => Promise<FileEntry[]>;
+  unlink: (path: string) => Promise<void>;
+  lstat: (path: string) => Promise<Stats>;
 
   constructor(sftp: SFTPWrapper) {
-    this.fastPut = Bluebird.promisify<void, string, string, TransferOptions>(sftp.fastPut, {context: sftp});
-    this.open = Bluebird.promisify<Buffer, string, string, InputAttributes>(sftp.open, {context: sftp});
-    this.mkdir = Bluebird.promisify<void, string, InputAttributes>(sftp.mkdir, {context: sftp});
-    this.rmdir = Bluebird.promisify<void, string>(sftp.rmdir, {context: sftp});
-    this.readdir = Bluebird.promisify(sftp.readdir, {context: sftp});
-    this.lstat = Bluebird.promisify(sftp.lstat, {context: sftp});
-    this.unlink = Bluebird.promisify<void, string>(sftp.unlink, {context: sftp});
+    this.fastPut = util.promisify<string, string, TransferOptions>(sftp.fastPut).bind(sftp);
+    this.open = util.promisify<string, string, InputAttributes, Buffer>(sftp.open).bind(sftp);
+    this.mkdir = util.promisify<string, InputAttributes>(sftp.mkdir).bind(sftp);
+    this.rmdir = util.promisify<string>(sftp.rmdir).bind(sftp);
+    this.readdir = util.promisify<string | Buffer, FileEntry[]>(sftp.readdir).bind(sftp);
+    this.lstat = util.promisify<string, Stats>(sftp.lstat).bind(sftp);
+    this.unlink = util.promisify<string>(sftp.unlink).bind(sftp);
   }
 }

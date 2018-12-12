@@ -1,9 +1,8 @@
-import * as Bluebird from 'bluebird';
 import chalk from 'chalk';
 import { SftpSyncConfig, SftpSyncOptions } from './lib/config';
 import { SftpSync } from './lib/sftpSync';
 
-export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Bluebird<void> {
+export function deploy(config: SftpSyncConfig, options?: SftpSyncOptions): Promise<void> {
   const deployer = new SftpSync(config, options);
 
   console.log(chalk.green(`* Deploying to host ${config.host}`));

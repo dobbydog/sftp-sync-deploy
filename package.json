@@ -24,14 +24,13 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@types/bluebird": "^3.0.36",
     "@types/minimatch": "^3.0.3",
     "@types/node": "^9.4.1",
     "@types/ssh2": "^0.5.33",
     "@types/ssh2-streams": "^0.1.2",
-    "bluebird": "^3.4.6",
     "chalk": "^2.3.0",
     "minimatch": "^3.0.3",
+    "queue": "^5.0.0",
     "ssh2": "^0.5.4"
   },
   "devDependencies": {

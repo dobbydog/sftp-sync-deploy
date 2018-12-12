@@ -1,14 +1,14 @@
 import * as fs from 'fs';
-import * as Bluebird from 'bluebird';
+import * as util from 'util';
 
 export interface AsyncFsSubset {
-  lstat: (path: string | Buffer) => Bluebird<fs.Stats>;
-  readdir: (path: string | Buffer) => Bluebird<string[]>;
-  readFile: (filename: string) => Bluebird<Buffer>;
+  lstat: (path: string | Buffer) => Promise<fs.Stats>;
+  readdir: (path: string | Buffer) => Promise<string[]>;
+  readFile: (filename: string) => Promise<Buffer>;
 }
 
 export const fsAsync: AsyncFsSubset = {
-  lstat: Bluebird.promisify(fs.lstat),
-  readdir: Bluebird.promisify(fs.readdir),
-  readFile: Bluebird.promisify(fs.readFile)
+  lstat: util.promisify(fs.lstat),
+  readdir: util.promisify(fs.readdir),
+  readFile: util.promisify(fs.readFile)
 };
