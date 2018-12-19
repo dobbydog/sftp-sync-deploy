@@ -15,4 +15,5 @@ export interface SftpSyncOptions {
   exclude?: string[];
   excludeMode?: 'ignore'|'remove';
   forceUpload?: boolean;
+  concurrency?: number;
 }

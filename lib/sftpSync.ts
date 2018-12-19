@@ -1,12 +1,11 @@
 import { Client, SFTP_STATUS_CODE } from 'ssh2';
-import { Stats as SSH2Stats } from 'ssh2-streams';
+import { Stats as SSH2Stats, FileEntry } from 'ssh2-streams';
 import * as path from 'path';
+import * as fs from 'fs';
 import { chomp } from './util';
-import { AsyncSFTPWrapper } from './asyncSftpWrapper';
-import { fsAsync } from './asyncFs';
+import { QueuifiedSFTP } from './queuifiedSftp';
 import { SyncTable } from './syncTable';
 import { SftpSyncConfig, SftpSyncOptions } from './config';
-import { Stats } from 'fs';
 
 /**
  * Creates a new SftpDeploy instance
@@ -29,9 +28,9 @@ export class SftpSync {
   client: Client;
 
   /**
-   * Promisified SFTP stream
+   * Promisified SFTP wrapper with queue
    */
-  sftpAsync: AsyncSFTPWrapper;
+  queuifiedSftp: QueuifiedSFTP;
 
   /**
    * Local directory root
@@ -54,11 +53,13 @@ export class SftpSync {
   constructor(config: SftpSyncConfig, options?: SftpSyncOptions) {
     this.config = config;
 
-    this.options = Object.assign({
+    this.options = {
       dryRun: false,
       exclude: [],
-      excludeMode: 'remove'
-    }, options);
+      excludeMode: 'remove',
+      concurrency: 100,
+      ...options,
+    };
 
     this.client = new Client;
     this.localRoot = chomp(path.resolve(this.config.localDir), path.sep);
@@ -68,14 +69,16 @@ export class SftpSync {
   /**
    * Make SSH2 connection
    */
-  async connect(): Promise<void> {
+  connect(): Promise<void> {
     let privKeyRaw: Buffer;
 
-    try {
-      privKeyRaw = await fsAsync.readFile(this.config.privateKey);
-    }
-    catch (err) {
-      throw new Error(`Local Error: Private key file not found ${this.config.privateKey}`);
+    if (this.config.privateKey){
+      try {
+        privKeyRaw = fs.readFileSync(this.config.privateKey);
+      }
+      catch (err) {
+        throw new Error(`Local Error: Private key file not found ${this.config.privateKey}`);
+      }
     }
 
     return new Promise<void>((resolve, reject) => {
@@ -135,7 +138,7 @@ export class SftpSync {
       }
 
       await this[task.method].apply(this, args);
-      return entry.liveRunLog();
+      entry.liveRunLog();
     }));
 
     if (isRootTask) this.close();
@@ -145,33 +148,43 @@ export class SftpSync {
    * Upload file/directory
    */
   async upload(relativePath: string, isRootTask: boolean = true): Promise<void> {
-    if (!this.sftpAsync) {
-      await this.getAsyncSftp();
+    if (!this.queuifiedSftp) {
+      await this.initQueuifiedSftp();
       return this.upload(relativePath, isRootTask);
     }
 
     const localPath = this.localFullPath(relativePath);
     const remotePath = this.remoteFullPath(relativePath);
 
-    try {
-      const stat = await fsAsync.lstat(localPath);
-      if (stat.isDirectory()) {
-        const files = await fsAsync.readdir(localPath);
+    const stat = fs.lstatSync(localPath);
+
+    if (stat.isDirectory()) {
+      const files = fs.readdirSync(localPath);
+      if (files && files.length) {
         await Promise.all(
           files.map(filename => this.upload(path.posix.join(relativePath, filename), false))
-        )
-      } else {
-        await this.sftpAsync.fastPut(localPath, remotePath);
+        );
       }
-    } catch (err) {
-      switch (err.code) {
-        case SFTP_STATUS_CODE.NO_SUCH_FILE: {
-          throw new Error(`Remote Error: Cannot upload file ${remotePath}`);
+    } else {
+      try {
+        // const buffer = fs.readFileSync(localPath);
+        // const handle = await this.queuifiedSftp.open(remotePath, 'r+');
+        // await this.queuifiedSftp.writeData(handle, buffer, 0, buffer.length, 0);
+        // await this.queuifiedSftp.close(handle);
+        await this.queuifiedSftp.fastPut(localPath, remotePath);
+      } catch (err) {
+        switch (err.code) {
+          case SFTP_STATUS_CODE.NO_SUCH_FILE: {
+            throw new Error(`Remote Error: Cannot upload file ${remotePath}`);
+          }
+          case SFTP_STATUS_CODE.PERMISSION_DENIED: {
+            throw new Error(`Remote Error: Cannot upload file. Permission denied ${remotePath}`);
+          }
+          case SFTP_STATUS_CODE.FAILURE: {
+            throw new Error(`Remote Error: Unknown error while uploading file ${remotePath}`);
+          }
+          default: throw err;
         }
-        case SFTP_STATUS_CODE.PERMISSION_DENIED: {
-          throw new Error(`Remote Error: Cannot upload file. Permission denied ${remotePath}`);
-        }
-        default: throw err;
       }
     }
 
@@ -182,22 +195,22 @@ export class SftpSync {
    * Remove a remote file or directory
    */
   async removeRemote(relativePath: string, isRootTask: boolean = true): Promise<void> {
-    if (!this.sftpAsync) {
-      await this.getAsyncSftp();
+    if (!this.queuifiedSftp) {
+      await this.initQueuifiedSftp();
       return this.removeRemote(relativePath, isRootTask);
     }
 
     const remotePath = this.remoteFullPath(relativePath);
-    const stat = await this.sftpAsync.lstat(remotePath);
+    const stat = await this.queuifiedSftp.lstat(remotePath);
 
     if (stat.isDirectory()) {
-      const files = await this.sftpAsync.readdir(remotePath);
+      const files = await this.queuifiedSftp.readdir(remotePath);
       await Promise.all(
         files.map(file => this.removeRemote(path.posix.join(relativePath, file.filename), false))
       );
-      await this.sftpAsync.rmdir(remotePath);
+      await this.queuifiedSftp.rmdir(remotePath);
     } else {
-      await this.sftpAsync.unlink(remotePath);
+      return this.queuifiedSftp.unlink(remotePath);
     }
 
     if (isRootTask) this.close();
@@ -213,23 +226,26 @@ export class SftpSync {
   /**
    * Create a directory on a remote host
    */
-  private async createRemoteDirectory(relativePath: string): Promise<void> {
-    if (!this.sftpAsync) {
-      await this.getAsyncSftp();
+  async createRemoteDirectory(relativePath: string): Promise<void> {
+    if (!this.queuifiedSftp) {
+      await this.initQueuifiedSftp();
       return this.createRemoteDirectory(relativePath);
     }
 
     const remotePath = this.remoteFullPath(relativePath);
 
     try {
-      await this.sftpAsync.mkdir(remotePath);
+      await this.queuifiedSftp.mkdir(remotePath);
     } catch (err) {
       switch (err.code) {
         case SFTP_STATUS_CODE.NO_SUCH_FILE: {
-          throw new Error(`Remote Error: Cannnot create directory ${remotePath}`);
+          throw new Error(`Remote Error: Cannot create directory ${remotePath}`);
         }
         case SFTP_STATUS_CODE.PERMISSION_DENIED: {
-          throw new Error(`Remote Error: Cannnot create directory. Permission denied ${remotePath}`);
+          throw new Error(`Remote Error: Cannot create directory. Permission denied ${remotePath}`);
+        }
+        case SFTP_STATUS_CODE.FAILURE: {
+          throw new Error(`Remote Error: Unknown error while creating directory ${remotePath}`);
         }
         default: throw err;
       }
@@ -240,8 +256,8 @@ export class SftpSync {
    * Build a local and remote files status report for the specified path
    */
   private async buildSyncTable(relativePath: string): Promise<SyncTable> {
-    if (!this.sftpAsync) {
-      await this.getAsyncSftp();
+    if (!this.queuifiedSftp) {
+      await this.initQueuifiedSftp();
       return this.buildSyncTable(relativePath);
     }
 
@@ -250,28 +266,10 @@ export class SftpSync {
     const table = new SyncTable(relativePath, this.options);
 
     const readLocal = async () => {
-      const files = await fsAsync.readdir(localPath);
+      let files: string[];
 
       try {
-        await Promise.all(files.map(async filename => {
-          const fullPath = path.join(localPath, filename);
-          let stat: Stats;
-
-          try {
-            stat = await fsAsync.lstat(fullPath);
-          } catch (err) {
-            if (err.code === 'EPERM') {
-              table.set(filename, {localStat: 'error', localTimestamp: null});
-            }
-            return;
-          }
-
-          const mtime = Math.floor(new Date(stat.mtime).getTime() / 1000);
-          table.set(filename, {
-            localStat: stat.isDirectory() ? 'dir' : 'file',
-            localTimestamp: mtime
-          });
-        }));
+        files = fs.readdirSync(localPath);
       } catch (err) {
         switch (err.code) {
           case 'ENOENT'  : throw new Error(`Local Error: No such directory ${localPath}`);
@@ -280,74 +278,89 @@ export class SftpSync {
           default        : throw err;
         }
       }
+
+      if (!files || !files.length) return;
+
+      await Promise.all(files.map(async filename => {
+        const fullPath = path.join(localPath, filename);
+        let stat: fs.Stats;
+
+        try {
+          fs.accessSync(fullPath, fs.constants.R_OK);
+          stat = fs.lstatSync(fullPath);
+        } catch (err) {
+          if (err.code === 'EPERM' || err.code === 'EACCES') {
+            table.set(filename, {localStat: 'error', localTimestamp: null});
+          }
+          return;
+        }
+
+        const mtime = Math.floor(new Date(stat.mtime).getTime() / 1000);
+        table.set(filename, {
+          localStat: stat.isDirectory() ? 'dir' : 'file',
+          localTimestamp: mtime
+        });
+      }));
     };
 
     const readRemote = async () => {
-      const files = await this.sftpAsync.readdir(remotePath);
+      let files: FileEntry[];
 
       try {
-        await Promise.all(files.map(async file => {
-          const fullPath = path.posix.join(remotePath, file.filename);
-          let stat: SSH2Stats;
+        files = await this.queuifiedSftp.readdir(remotePath);
+      } catch (err) {}
 
-          try {
-            stat = await this.sftpAsync.lstat(fullPath);
-            if (stat.isDirectory()) {
-              await this.sftpAsync.readdir(fullPath);
-            } else {
-              await this.sftpAsync.open(fullPath, 'r+');
-            }
-          } catch (err) {
-            if (err.code === SFTP_STATUS_CODE.PERMISSION_DENIED) {
-              table.set(file.filename, {remoteStat: 'error', remoteTimestamp: null});
-            }
-            return;
+      if (!files || !files.length) return;
+
+      await Promise.all(files.map(async file => {
+        const fullPath = path.posix.join(remotePath, file.filename);
+        let stat: SSH2Stats;
+
+        try {
+          stat = await this.queuifiedSftp.lstat(fullPath);
+
+          if (stat.isDirectory()) {
+            await this.queuifiedSftp.readdir(fullPath);
+          } else {
+            const buffer = await this.queuifiedSftp.open(fullPath, 'r+');
+            await this.queuifiedSftp.close(buffer);
           }
+        } catch (err) {
+          if (err.code === SFTP_STATUS_CODE.PERMISSION_DENIED) {
+            table.set(file.filename, {remoteStat: 'error', remoteTimestamp: null});
+          }
+          return;
+        }
 
+        if (stat) {
           table.set(file.filename, {
             remoteStat: stat.isDirectory() ? 'dir' : 'file',
             remoteTimestamp: stat.mtime
           });
-        }));
-      } catch (err) {
-        switch (err.code) {
-          case SFTP_STATUS_CODE.NO_SUCH_FILE: {
-            if (this.options.dryRun) break;
-            throw new Error(`Remote Error: No such directory ${remotePath}`);
-          }
-          case SFTP_STATUS_CODE.PERMISSION_DENIED: {
-            throw new Error(`Remote Error: Cannnot read directory. Permission denied ${remotePath}`);
-          }
-          default: throw err;
         }
-      }
+      }));
     };
 
-    await Promise.all([readLocal(), readRemote()])
+    await Promise.all([readLocal(), readRemote()]);
     return table.forEach(entry => entry.detectExclusion());
   }
 
   /**
    * Get an async version of sftp stream
    */
-  private async getAsyncSftp(): Promise<AsyncSFTPWrapper> {
-    if (this.sftpAsync) {
-      return this.sftpAsync;
+  private async initQueuifiedSftp(concurrency = this.options.concurrency): Promise<QueuifiedSFTP> {
+    if (this.queuifiedSftp) {
+      return this.queuifiedSftp;
     }
 
     if (!this.connected) {
       await this.connect();
-      return this.getAsyncSftp();
+      return this.initQueuifiedSftp(concurrency);
     }
 
-    return new Promise<AsyncSFTPWrapper>((resolve, reject) => {
-      this.client.sftp((err, sftp) => {
-        if (err) return reject(err);
+    this.queuifiedSftp = await QueuifiedSFTP.init(this.client, concurrency);
 
-        this.sftpAsync = new AsyncSFTPWrapper(sftp);
-        resolve(this.sftpAsync);
-      });
-    });
+    return this.queuifiedSftp;
   }
 
   /**

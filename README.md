@@ -1,9 +1,11 @@
 # sftp-sync-deploy
+
 Sync local files to remote using SFTP.
 
 ## Usage
 
 ### Javscript
+
 ```js
 const { deploy } = require('sftp-sync-deploy');
 
@@ -26,17 +28,19 @@ let options = {
     'src/**/*.spec.ts'
   ],
   excludeMode: 'remove',          // Behavior for excluded files ('remove' or 'ignore'), Default to 'remove'.
-  forceUpload: false              // Force uploading all files, Default to false(upload only newer files).
+  forceUpload: false,             // Force uploading all files, Default to false(upload only newer files).
+  concurrency: 100                // Max number of SFTP tasks processed concurrently. Default to 100.
 };
 
 deploy(config, options).then(() => {
   console.log('success!');
 }).catch(err => {
   console.error('error! ', err);
-})
+});
 ```
 
 ### TypeScript
+
 ```ts
 import { deploy, SftpSyncConfig, SftpSyncOptions } from 'sftp-sync-deploy';
 
@@ -47,16 +51,20 @@ deploy(config, options);
 ```
 
 ## Dry run mode
+
 ```js
 deploy(config, {dryRun: true});
 ```
+
 Outputs the tasks to be done for each file in following format. Any changes of the files will not be performed.
+
 ```
 [ (local file status) | (remote file status) ] (file path)
                                                -> (task)
 ```
 
 ### Output example
+
 ```
 # Local is a file (upload the file)
 [ F | F ] index.html
@@ -66,15 +74,15 @@ Outputs the tasks to be done for each file in following format. Any changes of t
 [ D | D ] lib
           -> sync
 
-# Excluded. (do nothing)
-[ X |   ] node_modules
-          -> ignore
-
 # Remote exists and local doesn't (remove the remote file or directory)
 [   | F ] index.html.bak
           -> remove remote
 
-# Remote exists and local is excluded (operation depends on excludeMode option)
+# Excluded (do nothing)
+[ X |   ] node_modules
+          -> ignore
+
+# Excluded and remote exists (operation depends on excludeMode option)
 [ X | D ] .bin
           -> remove remote # if excludeMode is 'remove'
           -> ignore        # if excludeMode is 'ignore'
@@ -86,3 +94,4 @@ Outputs the tasks to be done for each file in following format. Any changes of t
 # Permission error on a remote server (ignored)
 [ F | ! ] secret.txt
           -> denied
+```
