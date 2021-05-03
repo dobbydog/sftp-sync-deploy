@@ -70,14 +70,20 @@ export class SftpSync {
    * Make SSH2 connection
    */
   connect(): Promise<void> {
-    let privKeyRaw: Buffer;
+    let privKeyRaw: Buffer | string;
 
-    if (this.config.privateKey){
-      try {
-        privKeyRaw = fs.readFileSync(this.config.privateKey);
-      }
-      catch (err) {
-        throw new Error(`Local Error: Private key file not found ${this.config.privateKey}`);
+    const { privateKey } = this.config;
+
+    if (privateKey){
+      if(privateKey.startsWith('---')) {
+         privKeyRaw = privateKey
+      } else {
+        try {
+          privKeyRaw = fs.readFileSync(this.config.privateKey);
+        }
+        catch (err) {
+          throw new Error(`Local Error: Private key file not found ${this.config.privateKey}`);
+        }
       }
     }
 
