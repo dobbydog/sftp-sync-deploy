@@ -14,7 +14,7 @@ let config = {
   port: 22,                       // Optional, Default to 22.
   username: 'user',               // Required.
   password: 'password',           // Optional.
-  privateKey: '/path/to/key.pem', // Optional.
+  privateKey: '/path/to/key.pem', // Optional. Path to pem file or the raw private key string.
   passphrase: 'passphrase',       // Optional.
   agent: '/path/to/agent.sock',   // Optional, path to the ssh-agent socket.
   localDir: 'dist',               // Required, Absolute or relative to cwd.
