@@ -19,6 +19,8 @@ export class SyncTableEntry {
   remoteStat: FileStatus = null;
   localTimestamp: number = null;
   remoteTimestamp: number = null;
+  localSize: number = null;
+  remoteSize: number = null;
   task: SyncTask;
 
   constructor(
@@ -54,7 +56,19 @@ export class SyncTableEntry {
     if (this.localStat === 'excluded' || task.hasError) {
       task.method = 'noop';
     } else if (this.localStat === 'file') {
-      if (!options.forceUpload && this.localTimestamp <= this.remoteTimestamp) {
+      let isNeedToUpload = false;
+      if (options.forceUpload) {
+        isNeedToUpload = true;
+      } else if (this.localSize != null && this.remoteSize != null) {
+        /*
+          It is need to wait for uploading,
+          If the task is restarted before done, It can never be uploaded successfully.
+        */
+        isNeedToUpload = (this.localSize === this.remoteSize && this.localTimestamp <= this.remoteTimestamp);
+      } else {
+        isNeedToUpload = this.localTimestamp <= this.remoteTimestamp;
+      }
+      if (!isNeedToUpload) {
         task.skip = true;
         task.method = 'noop';
       } else {

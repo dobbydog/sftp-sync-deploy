@@ -290,7 +290,7 @@ export class SftpSync {
           stat = fs.lstatSync(fullPath);
         } catch (err) {
           if (err.code === 'EPERM' || err.code === 'EACCES') {
-            table.set(filename, {localStat: 'error', localTimestamp: null});
+            table.set(filename, {localStat: 'error', localTimestamp: null, localSize: null});
           }
           return;
         }
@@ -298,7 +298,8 @@ export class SftpSync {
         const mtime = Math.floor(new Date(stat.mtime).getTime() / 1000);
         table.set(filename, {
           localStat: stat.isDirectory() ? 'dir' : 'file',
-          localTimestamp: mtime
+          localTimestamp: mtime,
+          localSize: stat.size
         });
       }));
     };
@@ -327,7 +328,7 @@ export class SftpSync {
           }
         } catch (err) {
           if (err.code === SFTP_STATUS_CODE.PERMISSION_DENIED) {
-            table.set(file.filename, {remoteStat: 'error', remoteTimestamp: null});
+            table.set(file.filename, {remoteStat: 'error', remoteTimestamp: null, remoteSize: null});
           }
           return;
         }
@@ -335,7 +336,8 @@ export class SftpSync {
         if (stat) {
           table.set(file.filename, {
             remoteStat: stat.isDirectory() ? 'dir' : 'file',
-            remoteTimestamp: stat.mtime
+            remoteTimestamp: stat.mtime,
+            remoteSize: stat.size
           });
         }
       }));
